@@ -27,19 +27,19 @@ read_sql_analyst_Server <- function(sql_query) {
 ECDS_sql <- "SELECT
 a.ProviderSiteCode
 ,CAST(a.ArrivalDate as date) 'ArrivalDate'
-,CASE WHEN c.dEventName LIKE '%Christmas Day%' then 1 else 0 END AS 'Christmas'
-,CASE WHEN c.dEventName LIKE '%New Years Day%' then 1 else 0 END AS 'New_Years_Day'
-,CASE WHEN c.dEventName LIKE '%Good Friday%' then 1 else 0 END AS 'Good_Friday'
-,CASE WHEN c.dEventName LIKE '%Easter Monday%' then 1 else 0 END AS 'Easter'
-,CASE WHEN c.dEventName LIKE '%Early May bh%' then 1 else 0 END AS 'May_BH'
-,CASE WHEN c.dEventName LIKE '%Spring bh%' then 1 else 0 END AS 'Spring_BH'
-,CASE WHEN c.dEventName LIKE '%Summer bh%' then 1 else 0 END AS 'Summer_BH'
-,CASE WHEN c.dEventName LIKE '%Platinum Jubilee%' then 1 else 0 END AS 'Jubilee'
-,CASE WHEN c.dEventName LIKE '%State Funeral%' then 1 else 0 END AS 'State_Funeral'
-,CASE WHEN c.dEventName LIKE '%Ambulance s%' then 1 else 0 END AS 'Strike_Ambulance'
-,CASE WHEN c.dEventName LIKE '%Junior doctors strike%' then 1 else 0 END AS 'Strike_Junior_Doctor'
-,CASE WHEN c.dEventName LIKE '%Coronation%' then 1 else 0 END AS 'Coronation'
-,CASE WHEN c.dEventName LIKE '%Consultant strike%' then 1 else 0 END AS 'Strike_consultant'
+,CASE WHEN c.EventName LIKE '%Christmas Day%' then 1 else 0 END AS 'Christmas'
+,CASE WHEN c.EventName LIKE '%New Years Day%' then 1 else 0 END AS 'New_Years_Day'
+,CASE WHEN c.EventName LIKE '%Good Friday%' then 1 else 0 END AS 'Good_Friday'
+,CASE WHEN c.EventName LIKE '%Easter Monday%' then 1 else 0 END AS 'Easter'
+,CASE WHEN c.EventName LIKE '%Early May bh%' then 1 else 0 END AS 'May_BH'
+,CASE WHEN c.EventName LIKE '%Spring bh%' then 1 else 0 END AS 'Spring_BH'
+,CASE WHEN c.EventName LIKE '%Summer bh%' then 1 else 0 END AS 'Summer_BH'
+,CASE WHEN c.EventName LIKE '%Platinum Jubilee%' then 1 else 0 END AS 'Jubilee'
+,CASE WHEN c.EventName LIKE '%State Funeral%' then 1 else 0 END AS 'State_Funeral'
+,CASE WHEN c.EventName LIKE '%Ambulance s%' then 1 else 0 END AS 'Strike_Ambulance'
+,CASE WHEN c.EventName LIKE '%Junior doctors strike%' then 1 else 0 END AS 'Strike_Junior_Doctor'
+,CASE WHEN c.EventName LIKE '%Coronation%' then 1 else 0 END AS 'Coronation'
+,CASE WHEN c.EventName LIKE '%Consultant strike%' then 1 else 0 END AS 'Strike_consultant'
 
 
 ,count(*) 'activity'
@@ -47,7 +47,7 @@ a.ProviderSiteCode
 
 --from ICB_HW.[ECDS].[CoreAttendance] a
 from emergency_Care.[ECDS].[VwECDSCoreAttendanceWithExtraDates] a
-left join [ICB_HW].[ICS].[tbCalEvents] c on CAST(a.ArrivalDate as Date) = c.dDateYMDHyphen
+left join [ICB_HW].[ICS].[tbCalEvents] c on CAST(a.ArrivalDate as Date) = c.[period]
 
 where 
 1=1
@@ -66,7 +66,7 @@ a.ProviderSiteCode
 
 --,a.ValidationErrors
 ,CAST(a.ArrivalDate as Date)
-,c.dEventName
+,c.EventName
 
 --HAVING
 --count(*) < 

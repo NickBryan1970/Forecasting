@@ -2,11 +2,12 @@ rm(list=ls())
 
 library(prophet)
 library(forecast)
+#library(plyr)
 library(dplyr)
 library(ggplot2)
 
 library(tidyverse)
-library(plyr)
+
 library(tidyr)
 library(sqldf)
 library(odbc)
@@ -68,24 +69,24 @@ d.DateDate 'ArrivalDate'
 ,NULL 'Prediction_Lower'
 ,NULL 'Prediction_Upper'
 ,a.ProviderSiteCode
-,c.dEventName
-,CASE WHEN c.dEventName LIKE '%Christmas Day%' then 1 else 0 END AS 'Christmas'
-,CASE WHEN c.dEventName LIKE '%New Years Day%' then 1 else 0 END AS 'New_Years_Day'
-,CASE WHEN c.dEventName LIKE '%Good Friday%' then 1 else 0 END AS 'Good_Friday'
-,CASE WHEN c.dEventName LIKE '%Easter Monday%' then 1 else 0 END AS 'Easter'
-,CASE WHEN c.dEventName LIKE '%Early May bh%' then 1 else 0 END AS 'May_BH'
-,CASE WHEN c.dEventName LIKE '%Spring bh%' then 1 else 0 END AS 'Spring_BH'
-,CASE WHEN c.dEventName LIKE '%Summer bh%' then 1 else 0 END AS 'Summer_BH'
-,CASE WHEN c.dEventName LIKE '%Platinum Jubilee%' then 1 else 0 END AS 'Jubilee'
-,CASE WHEN c.dEventName LIKE '%State Funeral%' then 1 else 0 END AS 'State_Funeral'
-,CASE WHEN c.dEventName LIKE '%Ambulance s%' then 1 else 0 END AS 'Strike_Ambulance'
-,CASE WHEN c.dEventName LIKE '%Junior doctors strike%' then 1 else 0 END AS 'Strike_Junior_Doctor'
-,CASE WHEN c.dEventName LIKE '%Coronation%' then 1 else 0 END AS 'Coronation'
-,CASE WHEN c.dEventName LIKE '%Consultant strike%' then 1 else 0 END AS 'Strike_consultant'
+,c.EventName
+,CASE WHEN c.EventName LIKE '%Christmas Day%' then 1 else 0 END AS 'Christmas'
+,CASE WHEN c.EventName LIKE '%New Years Day%' then 1 else 0 END AS 'New_Years_Day'
+,CASE WHEN c.EventName LIKE '%Good Friday%' then 1 else 0 END AS 'Good_Friday'
+,CASE WHEN c.EventName LIKE '%Easter Monday%' then 1 else 0 END AS 'Easter'
+,CASE WHEN c.EventName LIKE '%Early May bh%' then 1 else 0 END AS 'May_BH'
+,CASE WHEN c.EventName LIKE '%Spring bh%' then 1 else 0 END AS 'Spring_BH'
+,CASE WHEN c.EventName LIKE '%Summer bh%' then 1 else 0 END AS 'Summer_BH'
+,CASE WHEN c.EventName LIKE '%Platinum Jubilee%' then 1 else 0 END AS 'Jubilee'
+,CASE WHEN c.EventName LIKE '%State Funeral%' then 1 else 0 END AS 'State_Funeral'
+,CASE WHEN c.EventName LIKE '%Ambulance s%' then 1 else 0 END AS 'Strike_Ambulance'
+,CASE WHEN c.EventName LIKE '%Junior doctors strike%' then 1 else 0 END AS 'Strike_Junior_Doctor'
+,CASE WHEN c.EventName LIKE '%Coronation%' then 1 else 0 END AS 'Coronation'
+,CASE WHEN c.EventName LIKE '%Consultant strike%' then 1 else 0 END AS 'Strike_consultant'
 
 
 FROM reference.[Community].[DIM_tbDate] d
-left join [ICB_HW].[ICS].[tbCalEvents] c on CAST(d.DateDate as DATE) = c.dDateYMDHyphen
+left join [ICB_HW].[ICS].[tbCalEvents] c on CAST(d.DateDate as DATE) = c.period
 LEFT JOIN CTE1 a on CAST(d.DateDate as DATE) = CAST(a.ArrivalDate as Date)
 
 where 
@@ -125,7 +126,7 @@ df <- df %>% select(Date,
 colnames(df)[1] = 'ds'    # date name needs to be in this format for facebook prophet
 colnames(df)[2] = 'y'
 
-df$ds == '2022-06-24'
+#df$ds == '2022-06-24'
 
 # replace errors in activity levels
 
@@ -136,17 +137,19 @@ df$y[df$ds == as.Date("2022-06-26")] <- 246
 #as.Date("2022-06-24")
 # create bubble plot
 
-ggplot(df, aes(x=ds, y = y)) +
-  geom_line() +
-  xlab('Date')+
-  ylab('Activity')+
-  theme(text = element_text(size = 10)) +
-  scale_x_date (date_labels = "%Y  %b")
+# ggplot(df, aes(x=ds, y = y)) +
+#   geom_line() +
+#   xlab('Date')+
+#   ylab('Activity')+
+#   theme(text = element_text(size = 10)) +
+#   scale_x_date (date_labels = "%Y  %b")
 
 
 
 # isolate the days associated with christmas
 # i.e. easter = 1
+
+
 
 Easter_dates <- subset(df, df$Easter == 1)
 Easter_dates <- Easter_dates$ds
@@ -269,8 +272,8 @@ forecast <- predict(m, future)
 # -- vizualisation
 
 #plot(m, forecast)
-prophet_plot_components(m, forecast)
-plot(m, forecast) + add_changepoints_to_plot(m) 
+#prophet_plot_components(m, forecast)
+#plot(m, forecast) + add_changepoints_to_plot(m) 
 
 
 
@@ -342,16 +345,16 @@ colnames(act)[5] = 'actual'
 
 df3 <- rbind(act, op)
 
-q = ggplot() + 
-  #geom_line(data = op, aes(x = date, y = actual), color = "black") +
-  geom_line(data = df3, aes(x = date, y = prophet_upper),linetype="dashed", color = "darkgrey") +
-  geom_line(data = df3, aes(x = date, y = prophet_lower),linetype="dashed", color = "darkgrey") +
-  geom_line(data = df3, aes(x = date, y = prophet),linetype="dashed", color = "black") +
-  geom_line(data = df3, aes(x = date, y = actual), color = "black") +
-  xlab('Dates') +
-  ylab('WRH Activity')
-
-print(q)
+# q = ggplot() + 
+#   #geom_line(data = op, aes(x = date, y = actual), color = "black") +
+#   geom_line(data = df3, aes(x = date, y = prophet_upper),linetype="dashed", color = "darkgrey") +
+#   geom_line(data = df3, aes(x = date, y = prophet_lower),linetype="dashed", color = "darkgrey") +
+#   geom_line(data = df3, aes(x = date, y = prophet),linetype="dashed", color = "black") +
+#   geom_line(data = df3, aes(x = date, y = actual), color = "black") +
+#   xlab('Dates') +
+#   ylab('WRH Activity')
+# 
+# print(q)
 
 #write.csv(df3, 
 #          file = 'C:/Users/nick.bryan/OneDrive - Midlands and Lancashire CSU/Home/projects/R/Repository/pro1 - WRH ED daily Attendances time series analysis/wrh_ed_atts_prophet.csv',
