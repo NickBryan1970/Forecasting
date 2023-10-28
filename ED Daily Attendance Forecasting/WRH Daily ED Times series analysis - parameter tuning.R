@@ -57,7 +57,7 @@ and a.ProviderCode IN ('RWP00')
 and a.DepartmentType = '01'
 and a.ProviderSiteCode = 'RWP50'
 AND isnull(a.ValidationErrors,'') not like '%1A%'
-
+AND SUBSTRING(a.attendanceIdentifier, 3,1) = 'W'  -- excludes the EM OP clinic patients
 --AND CAST(a.ArrivalDate as Date) = '2022-03-29'
 
 
@@ -109,11 +109,11 @@ df$ds == '2022-06-24'
 
 # replace errors in activity levels
 
-df$y[df$ds == as.Date("2022-06-24")] <- 210 
-df$y[df$ds == as.Date("2022-06-25")] <- 225
-df$y[df$ds == as.Date("2022-06-26")] <- 246 
+#df$y[df$ds == as.Date("2022-06-24")] <- 210 
+#df$y[df$ds == as.Date("2022-06-25")] <- 225
+#df$y[df$ds == as.Date("2022-06-26")] <- 246 
 
-as.Date("2022-06-24")
+#as.Date("2022-06-24")
 # create bubble plot
 
 ggplot(df, aes(x=ds, y = y)) +

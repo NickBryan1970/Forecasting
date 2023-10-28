@@ -2,9 +2,19 @@ rm(list=ls())
 
 library(prophet)
 library(forecast)
+#library(plyr)
 library(dplyr)
 library(ggplot2)
 
+library(tidyverse)
+
+library(tidyr)
+library(sqldf)
+library(odbc)
+library(RODBC)
+library(DBI)
+
+#print ("loaded libraries")
 read_sql_analyst_Server <- function(sql_query) {
   # create a connection to MLCSU analyst server using user credentials
   
@@ -24,9 +34,44 @@ read_sql_analyst_Server <- function(sql_query) {
 #'                     FROM EAT_Reporting.dbo.tbInpatientEpisodes
 #'                    "
 
-ECDS_sql <- "SELECT
+ECDS_sql <- ";with CTE1 as
+(
+SELECT
 a.ProviderSiteCode
 ,CAST(a.ArrivalDate as date) 'ArrivalDate'
+,count(*) 'activity'
+
+FROM
+emergency_Care.[ECDS].[VwECDSCoreAttendanceWithExtraDates] a 
+
+
+where 
+1=1
+and CAST(a.ArrivalDate as Date) >= '2021-04-01'
+and CAST(a.ArrivalDate as Date) <= CAST(getdate() - 3 as date)
+and a.ProviderCode IN ('RWP00')
+and a.DepartmentType = '01'
+and a.ProviderSiteCode = 'RWP50'
+AND isnull(a.ValidationErrors,'') not like '%1A%'
+AND SUBSTRING(a.attendanceIdentifier, 3,1) = 'W'  -- excludes the EM OP clinic patients
+
+GROUP BY
+a.ProviderSiteCode
+,CAST(a.ArrivalDate as Date)
+)
+
+--HAVING
+--count(*) < 
+
+
+SELECT
+d.DateDate 'ArrivalDate'
+,a.activity
+,NULL 'Prediction'
+,NULL 'Prediction_Lower'
+,NULL 'Prediction_Upper'
+,a.ProviderSiteCode
+,c.EventName
 ,CASE WHEN c.EventName LIKE '%Christmas Day%' then 1 else 0 END AS 'Christmas'
 ,CASE WHEN c.EventName LIKE '%New Years Day%' then 1 else 0 END AS 'New_Years_Day'
 ,CASE WHEN c.EventName LIKE '%Good Friday%' then 1 else 0 END AS 'Good_Friday'
@@ -42,38 +87,16 @@ a.ProviderSiteCode
 ,CASE WHEN c.EventName LIKE '%Consultant strike%' then 1 else 0 END AS 'Strike_consultant'
 
 
-,count(*) 'activity'
-
-
---from ICB_HW.[ECDS].[CoreAttendance] a
-from emergency_Care.[ECDS].[VwECDSCoreAttendanceWithExtraDates] a
-left join [ICB_HW].[ICS].[tbCalEvents] c on CAST(a.ArrivalDate as Date) = c.[period]
+FROM reference.[Community].[DIM_tbDate] d
+left join [ICB_HW].[ICS].[tbCalEvents] c on CAST(d.DateDate as DATE) = c.period
+LEFT JOIN CTE1 a on CAST(d.DateDate as DATE) = CAST(a.ArrivalDate as Date)
 
 where 
 1=1
-and CAST(a.ArrivalDate as Date) >= '2021-04-01'
-and CAST(a.ArrivalDate as Date) <= CAST(getdate() - 3 as date)
-and a.ProviderCode IN ('RWP00')
-and a.DepartmentType = '01'
-and a.ProviderSiteCode = 'RWP50'
-AND isnull(a.ValidationErrors,'') not like '%1A%'
-AND SUBSTRING(a.attendanceIdentifier, 3,1) = 'W'  -- excludes the EM OP clinic patients
---AND CAST(a.ArrivalDate as Date) = '2022-03-29'
+and d.DateDate >= '2021-04-01'AND d.DateDate <= DATEADD(d,30,getDate())
 
-
-GROUP BY
-a.ProviderSiteCode
-
---,a.ValidationErrors
-,CAST(a.ArrivalDate as Date)
-,c.EventName
-
---HAVING
---count(*) < 
-
-
-ORDER BY
-CAST(a.ArrivalDate as Date)"
+ORDER by
+d.DateDate"
 
 df <- read_sql_analyst_Server(ECDS_sql)
 
@@ -116,16 +139,19 @@ colnames(df)[2] = 'y'
 #as.Date("2022-06-24")
 # create bubble plot
 
-ggplot(df, aes(x=ds, y = y)) +
-  geom_line() +
-  xlab('Date')+
-  ylab('Activity')+
-  theme(text = element_text(size = 10)) +
-  scale_x_date (date_labels = "%Y  %b")
+# ggplot(df, aes(x=ds, y = y)) +
+#   geom_line() +
+#   xlab('Date')+
+#   ylab('Activity')+
+#   theme(text = element_text(size = 10)) +
+#   scale_x_date (date_labels = "%Y  %b")
+
 
 
 # isolate the days associated with christmas
 # i.e. easter = 1
+
+
 
 Easter_dates <- subset(df, df$Easter == 1)
 Easter_dates <- Easter_dates$ds
@@ -190,13 +216,15 @@ holidays <- bind_rows(easter, good_friday, jubilee, state_funeral, strike_ambula
 
 ## --------- training and test set ----------
 
+
+
 training = df %>% 
-  filter(ds < '2023-04-01') %>%
+  filter(ds < Sys.Date() - 2) %>%
   select(ds, y, Christmas, New_Years_Day ,May_BH, Spring_BH, Summer_BH)
 
-test = df %>% 
-  filter(ds >= '2023-04-01') %>%
-  select(ds, y, Christmas, New_Years_Day ,May_BH, Spring_BH, Summer_BH)
+ test = df %>% 
+   filter(ds >= Sys.Date() - 2) %>%
+   select(ds, y, Christmas, New_Years_Day ,May_BH, Spring_BH, Summer_BH)
 
 # ------------- facebook prophet model
 
@@ -228,7 +256,7 @@ regressor_coefficients(m)
 # ----- create future data frame to hold future data
 
 future <- make_future_dataframe(m, 
-                                periods = nrow(test))
+                                periods = 33)
 
 future[,2:6]<- df %>% select (Christmas, New_Years_Day ,May_BH, Spring_BH, Summer_BH)
 
@@ -241,49 +269,13 @@ forecast <- predict(m, future)
 
 # Events
 
-forecast %>%
-  select(ds, easter) %>%
-  filter(abs(easter) > 0) %>%
-  filter(ds > '2023-04-01')
-print(Easter_dates)
 
-forecast %>%
-  select(ds, good_friday) %>%
-  filter(abs(good_friday) > 0) %>%
-  filter(ds > '2023-04-01')
-print(good_friday_dates)
-
-
-forecast %>%
-  select(ds, jubilee) %>%
-  filter(abs(jubilee) > 0) %>%
-  filter(ds > '2023-04-01')
-print(jubilee_dates)
-
-forecast %>%
-  select(ds, strike_ambulance) %>%
-  filter(abs(strike_ambulance) > 0) %>%
-  filter(ds > '2023-04-01')
-print(strike_amb_dates)
-
-
-forecast %>%
-  select(ds, strike_juniorDr) %>%
-  filter(abs(strike_juniorDr) > 0) %>%
-  filter(ds > '2023-04-01')
-print(strike_juniorDr_dates)
-
-forecast %>%
-  select(ds, strike_cons) %>%
-  filter(abs(strike_cons) >0) %>%
-  filter(ds > '2023-04-01')
-print(strike_cons_dates)
 
 # -- vizualisation
 
-plot(m, forecast)
-prophet_plot_components(m, forecast)
-plot(m, forecast) + add_changepoints_to_plot(m) 
+#plot(m, forecast)
+#prophet_plot_components(m, forecast)
+#plot(m, forecast) + add_changepoints_to_plot(m) 
 
 
 
@@ -292,53 +284,96 @@ plot(m, forecast) + add_changepoints_to_plot(m)
 # ---- Accuracy
 # ---- isolate the test period
 
-predictions = tail(forecast$yhat, nrow(test))
-prediction_upper <- tail(forecast$yhat_upper, nrow(test))
-prediction_lower <- tail(forecast$yhat_lower, nrow(test))
+#actual <- tail(training$ds, 30)
 
-
-accuracy(predictions, test$y)
+predictions = tail(forecast$yhat, 33)
+prediction_upper <- tail(forecast$yhat_upper, 33)
+prediction_lower <- tail(forecast$yhat_lower, 33)
+# 
+# 
+# accuracy(predictions, test$y)
 
 
 # ---------- save the forecast
 
-prophet = as.data.frame(predictions)
-colnames(prophet)[1] = 'Prophet'
+# prophet = as.data.frame(predictions)
+# colnames(prophet)[1] = 'Prophet'
+# 
+# op <- cbind(predictions, test$y)
+# colnames(op)[1] = 'prophet'    
+# colnames(op)[2] = 'actual'
+# 
+# 
+# 
+# d <- round((op[, 'actual'] - op[, 'prophet']), 2)  
+#   
+# percent_diff <- d / op[, 'actual']
+# abs_percent_diff <- abs(percent_diff) *100
+# MAPE <- mean(abs_percent_diff)
+d1 <- tail(df$ds, 33)
+dummyAct <- rep(NA, 33)
 
-op <- cbind(predictions, test$y)
-colnames(op)[1] = 'prophet'    
-colnames(op)[2] = 'actual'
-
-
-
-d <- round((op[, 'actual'] - op[, 'prophet']), 2)  
-  
-percent_diff <- d / op[, 'actual']
-abs_percent_diff <- abs(percent_diff) *100
-MAPE <- mean(abs_percent_diff)
-
-
-op <- data.frame(test$ds, test$y, predictions, prediction_lower, prediction_upper )
+op <- data.frame(d1,  predictions, prediction_lower, prediction_upper, dummyAct)
 colnames(op)[1] = 'date' 
-colnames(op)[2] = 'actual'
-colnames(op)[3] = 'prophet'
-colnames(op)[4] = 'prophet_lower'
-colnames(op)[5] = 'prophet_upper'
+colnames(op)[2] = 'prophet'
+colnames(op)[3] = 'prophet_lower'
+colnames(op)[4] = 'prophet_upper'
+colnames(op)[5] = 'actual'
 
-p = ggplot() + 
-  geom_line(data = op, aes(x = date, y = actual), color = "black") +
-  geom_line(data = op, aes(x = date, y = prophet_upper), color = "red") +
-  geom_line(data = op, aes(x = date, y = prophet_lower), color = "red") +
-  geom_line(data = op, aes(x = date, y = prophet), color = "blue") +
-  xlab('Dates') +
-  ylab('WRH Activity')
-
-print(p)
-
-op
-
-write.csv(op, 
-          file = 'C:/Users/nick.bryan/OneDrive - Midlands and Lancashire CSU/Home/projects/R/Repository/pro1 - WRH ED daily Attendances time series analysis/wrh_ed_atts_prophet.csv',
-          row.names = FALSE)
+# p = ggplot() + 
+#   geom_line(data = op, aes(x = date, y = prophet_upper), color = "red") +
+#   geom_line(data = op, aes(x = date, y = prophet_lower), color = "red") +
+#   geom_line(data = op, aes(x = date, y = prophet), color = "blue") +
+#   xlab('Dates') +
+#   ylab('WRH Activity')
+# 
+# print(p)
+# 
+# op
 
 
+dateActual <- tail(training$ds, 15)
+dummyPrediction <- rep(NA, 15)
+yActual <- tail(training$y, 15)
+lower <- rep(NA, 15)
+upper <- rep(NA, 15)
+act <- data.frame(dateActual, dummyPrediction, lower, upper, yActual)
+
+colnames(act)[1] = 'date' 
+colnames(act)[2] = 'prophet'
+colnames(act)[3] = 'prophet_lower'
+colnames(act)[4] = 'prophet_upper'
+colnames(act)[5] = 'actual'
+
+df3 <- rbind(act, op)
+
+# q = ggplot() +
+#   #geom_line(data = op, aes(x = date, y = actual), color = "black") +
+#   geom_line(data = df3, aes(x = date, y = prophet_upper),linetype="dashed", color = "darkgrey") +
+#   geom_line(data = df3, aes(x = date, y = prophet_lower),linetype="dashed", color = "darkgrey") +
+#   geom_line(data = df3, aes(x = date, y = prophet),linetype="dashed", color = "black") +
+#   geom_line(data = df3, aes(x = date, y = actual), color = "black") +
+#   xlab('Dates') +
+#   ylab('WRH Activity')
+# # 
+# print(q)
+
+#write.csv(df3, 
+#          file = 'C:/Users/nick.bryan/OneDrive - Midlands and Lancashire CSU/Home/projects/R/Repository/pro1 - WRH ED daily Attendances time series analysis/wrh_ed_atts_prophet.csv',
+#          row.names = FALSE)
+
+
+SQLConnection <-dbConnect(odbc(),
+                          Driver="SQL Server",
+                          Server="MLCSU-BI-SQL",
+                          Database="Working",
+                          Trusted_Connection="True")
+
+dbWriteTable(
+  conn = SQLConnection,
+  SQL('defaults.tbl_HWICS_UC_ED_Predictor'),
+  value = df3,
+  row.names = NULL,
+  overwrite = TRUE,
+  append = FALSE
+)
