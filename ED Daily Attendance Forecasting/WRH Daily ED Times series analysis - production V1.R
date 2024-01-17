@@ -1,4 +1,4 @@
-rm(list=ls())
+#rm(list=ls())
 
 library(prophet)
 library(forecast)
@@ -54,6 +54,7 @@ and a.DepartmentType = '01'
 and a.ProviderSiteCode = 'RWP50'
 AND isnull(a.ValidationErrors,'') not like '%1A%'
 AND SUBSTRING(a.attendanceIdentifier, 3,1) = 'W'  -- excludes the EM OP clinic patients
+
 
 GROUP BY
 a.ProviderSiteCode
@@ -132,9 +133,9 @@ colnames(df)[2] = 'y'
 
 # replace errors in activity levels
 
-#df$y[df$ds == as.Date("2022-06-24")] <- 210 
-#df$y[df$ds == as.Date("2022-06-25")] <- 225
-#df$y[df$ds == as.Date("2022-06-26")] <- 246 
+df$y[df$ds == as.Date("2022-06-24")] <- 210 
+df$y[df$ds == as.Date("2022-06-25")] <- 225
+df$y[df$ds == as.Date("2022-06-26")] <- 246 
 
 #as.Date("2022-06-24")
 # create bubble plot
@@ -355,7 +356,7 @@ df3 <- rbind(act, op)
 #   geom_line(data = df3, aes(x = date, y = actual), color = "black") +
 #   xlab('Dates') +
 #   ylab('WRH Activity')
-# # 
+# 
 # print(q)
 
 #write.csv(df3, 
@@ -371,7 +372,7 @@ SQLConnection <-dbConnect(odbc(),
 
 dbWriteTable(
   conn = SQLConnection,
-  SQL('defaults.tbl_HWICS_UC_ED_Predictor'),
+  SQL('defaults.tbl_DEFINE_YOUR_OWN_TABLE'),
   value = df3,
   row.names = NULL,
   overwrite = TRUE,
